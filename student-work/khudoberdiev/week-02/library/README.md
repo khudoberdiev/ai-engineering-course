@@ -48,10 +48,10 @@ Output: `Rolled Back:  deliberate failure before commit`, then `None`.
 
 ## How it works
 
-- **`create_all()`** reads every model that inherits `Base` and sends `CREATE TABLE`. `Mapped[int]` becomes `NOT NULL`, `| None` becomes nullable, and `ForeignKey` becomes `REFERENCES`.
-- **`add_all()`** only queues objects. `flush()` sends the INSERTs inside the transaction, and the end of `session.begin()` commits them. Parents were flushed before loans and notes so the foreign keys had rows to point to.
-- **Left join:** `/books/loans` starts from `Book` and uses `outerjoin`, so every book is kept. Book 3 has no loans, so its `loan_id` is `NULL`.
-- **Failed transaction:** `flush()` sent the UPDATE, but the exception left `session.begin()` before COMMIT, so it was rolled back.
+- **How are tables created from the models?** `create_all()` reads every model that inherits `Base` and sends `CREATE TABLE`. `Mapped[int]` becomes `NOT NULL`, `| None` becomes nullable, and `ForeignKey` becomes `REFERENCES`.
+- **How does `add_all()` insert rows?** It only queues objects. `flush()` sends the INSERTs inside the transaction, and the end of `session.begin()` commits them. Parents were flushed first so loans and notes had rows to point to.
+- **Why does the left join keep book 3?** `/books/loans` starts from `Book` and uses `outerjoin`, so every book is kept. Book 3 has no loans, so its `loan_id` is `NULL`.
+- **Why did the failed transaction leave the date empty?** `flush()` sent the UPDATE, but the exception left `session.begin()` before COMMIT, so it was rolled back.
 
 ## Bugs I hit
 
