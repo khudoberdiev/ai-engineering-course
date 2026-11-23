@@ -7,7 +7,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import Text, create_engine, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
-from sqlalchemy import ForeignKey, Text, create_engine, select
+from sqlalchemy import ForeignKey
 
 
 class Base(DeclarativeBase):
@@ -107,13 +107,43 @@ def list_loans(
     is_open: Annotated[bool | None, Query(alias="open")] = None,
 ):
     # Homework: join books and members, apply is_open, and order by loan ID.
-    raise HTTPException(status_code=501, detail="Complete the joined loan query")
+    stmt = (
+        select(
+        Loan.id, 
+        Loan.book_id, 
+        Loan.member_id,
+        Loan.borrowed_on,
+        Loan.returned_on,
+        Book.title.label("book_title"),
+        Member.name.label("borrower_name")
+    )
+    .join(Book, Loan.book_id == Book.id)
+    .join(Member, Loan.member_id == Member.id)
+    .order_by(Loan.id)
+)
+    if is_open is True:
+        stmt = stmt.where(Loan.returned_on.is_(None))
+    elif is_open is False:
+        stmt = stmt.where(Loan.returned_on.is_not(None))
+
+
+    return session.execute(stmt).mappings().all()
 
 
 @app.get("/books/loans", response_model=list[BookLoanRead])
 def list_book_loans(session: Annotated[Session, Depends(get_session)]):
     # Homework: left join from books to loans, including books with no loans.
-    raise HTTPException(status_code=501, detail="Complete the book left join")
+    stmt = (
+        select(
+            Book.id.label("book_id"), 
+            Book.title,
+            Loan.id.label("loan_id"),
+        )
+        .outerjoin(Loan, Loan.book_id == Book.id)
+        .order_by(Book.id, Loan.id)
+    )
+
+    return session.execute(stmt).mappings().all()
 
 
 @app.get("/books/{book_id}/notes", response_model=list[BookNoteRead])
@@ -137,4 +167,10 @@ def return_loan(
     session: Annotated[Session, Depends(get_session)],
 ):
     # Homework: find and return the loan inside one transaction.
-    raise HTTPException(status_code=501, detail="Complete the return transaction")
+    with session.begin():
+        loan = session.get(Loan, loan_id)
+        if loan is None:
+            raise HTTPException(status_code=404, detail="Not found")
+        if loan.returned_on is None:
+            loan.returned_on = body.returned_on
+    return loan
